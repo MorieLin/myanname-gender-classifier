@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Myanmar Name Gender Classifier</title>
+  <script src="https://cdn.jsdelivr.net/npm/onnxjs@0.1.8/dist/onnx.min.js"></script>
+ <link rel="icon" href="/favicon.ico" type="image/x-icon">
+ <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+  <style>
+    /* === Theme Variables === */
+    :root {
+      --bg: #ffffff;
+      --text: #111827;
+      --input-bg: #ffffff;
+      --input-border: #d1d5db;
+      --button-bg: #1a5fb4;
+      --button-hover: #0d47a1;
+      --result-text: #1a5fb4;
+      --info-text: #4b5563;
+      --card-bg: #f9f9f9;
+      --matrix-active: #4caf50;
+      --matrix-inactive: #e5e7eb;
+      --label-text: #6b7280;
+      --footer-bg: #f3f4f6;
+      --footer-border: #e5e7eb;
+    }
+
+    [data-theme="dark"] {
+      --bg: #111827;
+      --text: #f3f4f6;
+      --input-bg: #1f2937;
+      --input-border: #4b5563;
+      --button-bg: #3b82f6;
+      --button-hover: #2563eb;
+      --result-text: #60a5fa;
+      --info-text: #9ca3af;
+      --card-bg: #1f2937;
+      --matrix-active: #16a34a;
+      --matrix-inactive: #374151;
+      --label-text: #d1d5db;
+      --footer-bg: #1f2937;
+      --footer-border: #374151;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Pyidaungsu', 'Myanmar3', sans-serif;
+      padding: 20px;
+      max-width: 800px;
+      margin: 0 auto;
+      text-align: center;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    main {
+      flex: 1;
+    }
+
+    h1 {
+      color: var(--result-text);
+      border-bottom: 2px solid var(--footer-border);
+      padding-bottom: 10px;
+      margin-bottom: 15px;
+    }
+
+    p {
+      color: var(--info-text);
+      margin-bottom: 15px;
+    }
+
+    /* Responsive Input */
+    .input-group {
+      margin: 15px 0;
+    }
+
+    #nameInput {
+      width: 100%;
+      padding: 14px;
+      font-size: 18px;
+      border: 1px solid var(--input-border);
+      border-radius: 6px;
+      background-color: var(--input-bg);
+      color: var(--text);
+      transition: border-color 0.3s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    #nameInput:focus {
+      outline: none;
+      border-color: var(--button-bg);
+      box-shadow: 0 0 0 3px rgba(26, 95, 180, 0.2);
+    }
+
+    button {
+      padding: 12px 24px;
+      font-size: 18px;
+      background-color: var(--button-bg);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      margin: 12px 0;
+      transition: background-color 0.3s;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    button:hover {
+      background-color: var(--button-hover);
+    }
+
+    #result {
+      margin-top: 20px;
+      font-size: 28px;
+      font-weight: bold;
+      color: var(--result-text);
+    }
+
+    .info {
+      margin-top: 10px;
+      font-size: 14px;
+      color: var(--info-text);
+    }
+
+    /* Dark Mode Toggle */
+    .theme-toggle {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: var(--button-bg);
+      color: white;
+      border: none;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      font-size: 20px;
+      cursor: pointer;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      transition: transform 0.2s;
+      z-index: 10;
+    }
+
+    .theme-toggle:hover {
+      transform: scale(1.1);
+    }
+
+    /* Tokenizer Output */
+    #tokenizer-output {
+      margin-top: 10px;
+      font-size: 16px;
+      text-align: left;
+      padding: 12px;
+      background: var(--card-bg);
+      border-radius: 6px;
+      min-height: 40px;
+      border: 1px solid var(--input-border);
+    }
+
+    .word {
+      display: inline-block;
+      margin: 4px;
+      padding: 6px 10px;
+      background: var(--matrix-active);
+      color: white;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+
+    .char {
+      margin: 0 1px;
+      padding: 2px 4px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 2px;
+      font-size: 12px;
+    }
+
+    /* Matrix */
+    #matrix-container {
+      margin: 20px auto;
+      overflow-x: auto;
+      white-space: nowrap;
+      text-align: left;
+      max-width: 100%;
+    }
+
+    .matrix {
+      border-collapse: collapse;
+      font-size: 0;
+    }
+
+    .matrix-row {
+      height: 22px;
+    }
+
+    .matrix-cell {
+      width: 18px;
+      height: 18px;
+      border: 1px solid var(--input-border);
+    }
+
+    .matrix-label {
+      width: 20px;
+      text-align: right;
+      font-size: 12px;
+      color: var(--label-text);
+      padding-right: 5px;
+    }
+
+    .active { background-color: var(--matrix-active); }
+    .inactive { background-color: var(--matrix-inactive); }
+
+    .matrix-header {
+      text-align: center;
+      font-size: 12px;
+      color: var(--info-text);
+      margin-bottom: 5px;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 30px;
+      padding: 20px;
+      background-color: var(--footer-bg);
+      border-top: 1px solid var(--footer-border);
+      color: var(--info-text);
+      font-size: 14px;
+      text-align: center;
+      border-radius: 6px;
+    }
+
+    footer a {
+      color: var(--result-text);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <!-- Dark Mode Toggle -->
+  <button class="theme-toggle" id="themeToggle" aria-label="Toggle Dark Mode">🌙</button>
+
+  <main>
+    <h1>ကျား သို့မဟုတ် မ</h1>
+    <p>မြန်မာနာမည်ထည့်ပါ။ ကျား သို့မဟုတ် မ ခန့်မှန်းပေးမည်။</p>
+
+    <!-- Responsive Input Group -->
+    <div class="input-group">
+      <input type="text" id="nameInput" placeholder="ဥပမာ - သက်မွန်ကျော်" autocomplete="off" />
+    </div>
+    <button onclick="predict()">ခန့်မှန်းမည်</button>
+
+    <!-- Tokenized Words -->
+    <div><strong>Tokenized Words (Syllables):</strong></div>
+    <div id="tokenizer-output">Tokenizer: မပြရသေးပါ</div><br/>
+
+    <!-- 6x56 Matrix -->
+    <div>
+      <div class="matrix-header">Feature Matrix (6 words × 56 characters)</div>
+      <div id="matrix-container">
+        <table class="matrix" id="feature-matrix">
+          <!-- Filled by JS -->
+        </table>
+      </div>
+    </div>
+
+    <!-- Prediction -->
+    <div id="result" class="loading">Model ဖွင့်နေပါသည်...</div>
+
+    <div class="info">
+      <strong>မှတ်ချက်:</strong> ပထမ စကားလုံး ၆ လုံးကိုသာ အသုံးပြုပါသည်။ စကားလုံးတစ်ခုတွင် ပါဝင်သော စာလုံးတိုင်းကို ထည့်သွင်းစဉ်းစားပါသည်။
+    </div>
+  </main>
+
+  <!-- Footer -->
+<footer>
+  <p>
+    <strong>မြန်မာနာမည် ကျား/မ ခန့်မှန်းစနစ်</strong><br/>
+    <br/>
+    အသုံးပြုသူ၏ မည်သည့် အချက်အလက်ကိုမှ သိမ်းဆည်းမှတ်သားထားခြင်းမရှိသောကြောင့် လုံးဝလွတ်လပ်စွာအသုံးပြုနိုင်ပါသည်။<br/>
+    ဤအက်ပလီကေးရှင်းသည် <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener" style="color: var(--result-text); text-decoration: underline;">CC BY-NC-SA 4.0</a> လိုင်စင်ဖြင့် မျှဝေထားပါသည်။<br/>
+    <br/>
+    <strong>အသုံးပြုထားသော အရင်းအမြစ်များ:</strong><br/>
+    <span style="font-size: 14px;">
+      <a href="https://github.com/4R3B3LatH34R7/MMRTokenizerXL" target="_blank" rel="noopener" style="color: var(--result-text); text-decoration: underline; margin: 0 5px;">MMRTokenizerXL</a>
+      •
+      <a href="https://github.com/ye-kyaw-thu/myRoman/blob/main/person-name/person-name.ver1.0.txt" target="_blank" rel="noopener" style="color: var(--result-text); text-decoration: underline; margin: 0 5px;">myRoman</a>
+      •
+      <a href="https://github.com/L16H7/Myanmar_Names" target="_blank" rel="noopener" style="color: var(--result-text); text-decoration: underline; margin: 0 5px;">Myanmar_Names</a>
+    </span>
+    <br/><br/>
+    &copy; <span id="year"></span> 
+    <a href="#" 
+       onclick="alert('This app is licensed under CC BY-NC-SA 4.0.'); return false;" 
+       style="color: var(--result-text); text-decoration: underline;">
+       C.STRIKER
+    </a>
+  </p>
+</footer>
+
+  <script>
+    // Set current year in footer
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    // === 1. Unicode Constants ===
+    const kagyi = 4096;
+    const ah = 4129;
+    const shiftF = 4153;
+    const athat = 4154;
+    const witecha = 4140;
+    const moutcha = 4139;
+
+    const special_word = ['၎င်း', '၌', '၍', '၏', 'ဿ', 'ဪ', 'ဣ'];
+
+    // === 2. EXACT dset (copied from your message) ===
+    const dset = [
+      'က','ခ','ဂ','ဃ','င','စ','ဆ','ဇ','ဈ','ည',
+      'ဋ','ဌ','ဍ','ဎ','ဏ','တ','ထ','ဒ','ဓ','န',
+      'ပ','ဖ','ဗ','ဘ','မ','ယ','ရ','လ','ဝ','သ',
+      'ဟ','ဠ','အ','ဉ','ဥ','ဦ','ဿ','ဧ','ဩ',
+      'ျ','ြ','ှ','ွ','ေ','ာ','ါ','ိ','ီ','ု','ူ',
+      'ဲ','ံ','်','့','း','္'
+    ];
+
+    // === 3. Myanmar Character Checker ===
+    function isMyanmarChar(ch) {
+      const code = ch.charCodeAt(0);
+      return (code >= kagyi && code <= 4159) || (code >= 4160 && code <= 4175);
+    }
+
+    function check_mm(str) {
+      for (let i = 0; i < str.length; i++) {
+        if (!isMyanmarChar(str[i])) return false;
+      }
+      return true;
+    }
+
+    // === 4. mm_char_tokenizer - Returns WORDS (split by |) ===
+    function mm_char_tokenizer(target) {
+      let cleaned = target.replace(/\s+/g, '').replace(/[()]/g, '');
+      if (!cleaned) return [];
+
+      if (!check_mm(cleaned)) {
+        throw new Error("Invalid: non-Myanmar character found.");
+      }
+
+      let return_string = "";
+      let previous_ch_is_athat = false;
+      let shift_f_found = false;
+      let previous_char_at = cleaned.length + 1;
+
+      // Extract special words at start
+      let start_word = "";
+      let temp_str = cleaned;
+      let found;
+      do {
+        found = false;
+        for (const word of special_word) {
+          if (temp_str.startsWith(word)) {
+            start_word += (start_word ? "|" : "") + word;
+            temp_str = temp_str.slice(word.length);
+            found = true;
+            break;
+          }
+        }
+      } while (found);
+
+      // Process from end to start
+      for (let i = cleaned.length; i > 0; i--) {
+        const ch = cleaned[i - 1];
+        const code = ch.charCodeAt(0);
+
+        if (code !== shiftF) {
+          if (!shift_f_found || code === athat) {
+            if (code !== athat) {
+              if (kagyi <= code && code < ah + 9) {
+                if (!previous_ch_is_athat) {
+                  const seg = cleaned.substring(i - 1, previous_char_at - 1);
+                  return_string = seg + (return_string ? "|" : "") + return_string;
+                  previous_char_at = i;
+                } else {
+                  previous_ch_is_athat = false;
+                }
+              } else {
+                if (code === witecha || code === moutcha) {
+                  previous_ch_is_athat = false;
+                }
+              }
+            } else {
+              previous_ch_is_athat = true;
+              if (shift_f_found) shift_f_found = false;
+            }
+          } else {
+            shift_f_found = false;
+            if (previous_ch_is_athat) previous_ch_is_athat = false;
+          }
+        } else {
+          shift_f_found = true;
+        }
+      }
+
+      // Combine start and rest
+      if (start_word && return_string) {
+        return_string = start_word + "|" + return_string;
+      } else if (start_word) {
+        return_string = start_word;
+      }
+
+      return return_string.split('|').filter(Boolean);
+    }
+
+    // === 5. transform_file_position - All chars in each word ===
+    function transform_file_position(name) {
+      const words = mm_char_tokenizer(name.replace(/\n/g, '')).slice(0, 6);
+      const features = Array(6).fill().map(() => Array(dset.length).fill(0));
+
+      for (let i = 0; i < words.length; i++) {
+        const chars = Array.from(words[i]);
+        for (const c of chars) {
+          const idx = dset.indexOf(c);
+          if (idx !== -1) {
+            features[i][idx] = 1;  // Set 1 for every valid char
+          }
+        }
+      }
+
+      return { matrix: features, flat: features.flat() };
+    }
+
+    // === 6. Render 6x56 Matrix ===
+    function renderMatrix(matrix) {
+      const table = document.getElementById('feature-matrix');
+      table.innerHTML = '';
+
+      matrix.forEach((row, i) => {
+        const tr = document.createElement('tr');
+        const labelCell = document.createElement('td');
+        labelCell.className = 'matrix-label';
+        labelCell.textContent = `W${i+1}`;
+        tr.appendChild(labelCell);
+
+        row.forEach((value, j) => {
+          const td = document.createElement('td');
+          td.className = 'matrix-cell ' + (value ? 'active' : 'inactive');
+          td.title = `Word ${i+1}, Char '${dset[j]}': ${value}`;
+          tr.appendChild(td);
+        });
+        table.appendChild(tr);
+      });
+    }
+
+    // === 7. ONNX Model Setup ===
+    const session = new onnx.InferenceSession();
+    let modelLoaded = false;
+
+    async function loadModel() {
+      try {
+        await session.loadModel('model.onnx');
+        modelLoaded = true;
+        document.getElementById('result').textContent = 'Model ဖွင့်ပြီးပါပြီ။';
+      } catch (e) {
+        document.getElementById('result').textContent = 'Error: ' + e.message;
+        console.error(e);
+      }
+    }
+
+    // === 8. Prediction Function ===
+async function predict() {
+  if (!modelLoaded) {
+    alert("Model မဖွင့်ရသေးပါ။");
+    return;
+  }
+
+  const name = document.getElementById('nameInput').value.trim();
+  if (!name) {
+    alert("နာမည်ထည့်ပါ။");
+    // Clear matrix
+    const emptyMatrix = Array(6).fill().map(() => Array(dset.length).fill(0));
+    renderMatrix(emptyMatrix);
+    return;
+  }
+
+  let words;
+  try {
+    words = mm_char_tokenizer(name);
+  } catch (e) {
+    document.getElementById('result').textContent = 'Tokenizer error: ' + e.message;
+    document.getElementById('tokenizer-output').textContent = 'စကားလုံးများ မတွေ့ပါ။';
+
+    // ✅ Clear the feature matrix (show all gray)
+    const emptyMatrix = Array(6).fill().map(() => Array(dset.length).fill(0));
+    renderMatrix(emptyMatrix);
+    return;
+  }
+
+  // Show words
+  const tokenizerDiv = document.getElementById('tokenizer-output');
+  if (words.length === 0) {
+    tokenizerDiv.textContent = 'စကားလုံးများ မတွေ့ပါ။';
+
+    // ✅ Clear matrix
+    const emptyMatrix = Array(6).fill().map(() => Array(dset.length).fill(0));
+    renderMatrix(emptyMatrix);
+    return;
+  }
+
+  tokenizerDiv.innerHTML = words.map(word => {
+    const chars = Array.from(word).map(c => `<span class="char">${c}</span>`).join('');
+    return `<div class="word">"${chars}"</div>`;
+  }).join('');
+
+  // Generate features
+  const { matrix, flat: inputArray } = transform_file_position(name);
+  const sum = inputArray.reduce((a, b) => a + b, 0);
+
+  if (sum === 0) {
+    document.getElementById('result').textContent = 'စာလုံးများကို မှတ်သားမှုမရှိပါ။';
+    // ✅ Still render the matrix (it will be zeros from transform_file_position)
+    renderMatrix(matrix);
+    return;
+  }
+
+  // ✅ Render normal matrix
+  renderMatrix(matrix);
+
+  // Run model
+  const inputTensor = new onnx.Tensor(new Float32Array(inputArray), 'float32', [1, 336]);
+  try {
+    const outputMap = await session.run([inputTensor]);
+    const outputTensor = Array.from(outputMap.values())[0];
+    const prob = outputTensor.data[0];
+
+    const resultDiv = document.getElementById('result');
+    if (prob > 0.5) {
+      resultDiv.innerHTML = `ကျား <span style="font-size:16px;color:#666;">(${(prob * 100).toFixed(1)}%)</span>`;
+    } else if (prob < 0.5) {
+      resultDiv.innerHTML = `မ <span style="font-size:16px;color:#666;">(${(100 - prob * 100).toFixed(1)}%)</span>`;
+    } else {
+      resultDiv.innerHTML = `နှစ်မျိုးစလုံး <span style="font-size:16px;color:#666;">(50%)</span>`;
+    }
+  } catch (e) {
+    document.getElementById('result').textContent = 'Inference error: ' + e.message;
+    console.error(e);
+
+    // ✅ On inference error, also clear matrix
+    const emptyMatrix = Array(6).fill().map(() => Array(dset.length).fill(0));
+    renderMatrix(emptyMatrix);
+  }
+}
+
+    // === 9. Dark Mode Toggle ===
+    const themeToggle = document.getElementById('themeToggle');
+    const html = document.documentElement;
+
+    // Load saved theme
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    html.setAttribute('data-theme', savedTheme);
+    themeToggle.textContent = savedTheme === 'dark' ? '🌞' : '🌙';
+
+    themeToggle.addEventListener('click', () => {
+      const current = html.getAttribute('data-theme');
+      const newTheme = current === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', newTheme);
+      themeToggle.textContent = newTheme === 'dark' ? '🌞' : '🌙';
+      localStorage.setItem('theme', newTheme);
+    });
+
+    // === 10. Load on Start ===
+    window.onload = loadModel;
+  </script>
+</body>
+</html>
